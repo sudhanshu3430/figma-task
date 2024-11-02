@@ -1,61 +1,72 @@
-import dotenv from 'dotenv';
-import fetch from 'node-fetch';
-
-
+import dotenv from'dotenv'
+import axios from 'axios';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fs from 'fs';
 dotenv.config();
 
-// Your Figma API token and file ID
-const FIGMA_API_TOKEN = process.env.FIGMA_TOKEN;
-const FILE_ID = process.env.FILE_ID;
+const ACCESS_TOKEN = process.env.FIGMA_TOKEN;
+const FILE_KEY = process.env.FILE_ID;
+const FRAME_ID = "1:2";
 
-async function fetchFileData() {
-    const response = await fetch(`https://api.figma.com/v1/files/${FILE_ID}`, {
-        method: 'GET',
-        headers: {
-            'X-Figma-Token': FIGMA_API_TOKEN,
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Error fetching file data: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
+async function fetchImageUrl() {
+  const response = await axios.get(`https://api.figma.com/v1/images/${FILE_KEY}?format=pdf`, {
+    headers: {
+      'X-Figma-Token': ACCESS_TOKEN,
+    },
+    params: {
+      ids: FRAME_ID,
+      scale: 2,
+    },
+  });
+  return response.data.images[FRAME_ID];
 }
 
-async function exportImages(nodeIds) {
-    const response = await fetch(`https://api.figma.com/v1/images/${FILE_ID}?ids=${nodeIds}&scale=2&format=png`, {
-        method: 'GET',
-        headers: {
-            'X-Figma-Token': FIGMA_API_TOKEN,
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Error exporting images: ${response.statusText}`);
-    }
-
-    const imagesData = await response.json();
-    return imagesData;
+async function downloadImage(imageUrl) {
+  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+  return response.data;
 }
 
-async function run() {
-    try {
-        // Step 1: Fetch file data
-        const fileData = await fetchFileData();
-        console.log('File Data:', fileData);
+async function createPdf(imageBuffer) {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage();
 
-        
-        const nodeIds = '1:2'; 
+  const imageType = imageBuffer[0] === 0x89 ? 'png' : 'jpeg'; // Check first byte for PNG
 
-        // Step 3: Export images
-        const images = await exportImages(nodeIds);
-        console.log('Exported Images:', images);
+  let image;
+  if (imageType === 'png') {
+    image = await pdfDoc.embedPng(imageBuffer);
+  } else {
+    image = await pdfDoc.embedJpg(imageBuffer);
+  }
 
-    } catch (error) {
-        console.error('Error:', error.message);
-    }
+  const { width, height } = image.scale(1);
+
+  page.drawImage(image, {
+    x: 0,
+    y: page.getHeight() - height,
+    width,
+    height,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  fs.writeFileSync('output.pdf', pdfBytes);
 }
 
-run();
+
+
+async function main() {
+  try {
+    const imageUrl = await fetchImageUrl();
+    console.log('Image URL:', imageUrl); // Log the image URL
+    const imageBuffer = await downloadImage(imageUrl);
+    
+  
+
+    await createPdf(imageBuffer);
+    console.log('PDF created successfully!');
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
+main();
