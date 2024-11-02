@@ -1,15 +1,15 @@
-import dotenv from'dotenv'
+import dotenv from 'dotenv';
 import axios from 'axios';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 import fs from 'fs';
 dotenv.config();
 
 const ACCESS_TOKEN = process.env.FIGMA_TOKEN;
 const FILE_KEY = process.env.FILE_ID;
-const FRAME_ID = "1:2";
+const FRAME_ID = "1:2"; // Replace with your actual frame ID
 
 async function fetchImageUrl() {
-  const response = await axios.get(`https://api.figma.com/v1/images/${FILE_KEY}?format=pdf`, {
+  const response = await axios.get(`https://api.figma.com/v1/images/${FILE_KEY}`, {
     headers: {
       'X-Figma-Token': ACCESS_TOKEN,
     },
@@ -30,15 +30,9 @@ async function createPdf(imageBuffer) {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage();
 
-  const imageType = imageBuffer[0] === 0x89 ? 'png' : 'jpeg'; // Check first byte for PNG
-
-  let image;
-  if (imageType === 'png') {
-    image = await pdfDoc.embedPng(imageBuffer);
-  } else {
-    image = await pdfDoc.embedJpg(imageBuffer);
-  }
-
+  // Directly embed as PNG
+  const image = await pdfDoc.embedPng(imageBuffer);
+  
   const { width, height } = image.scale(1);
 
   page.drawImage(image, {
@@ -52,16 +46,12 @@ async function createPdf(imageBuffer) {
   fs.writeFileSync('output.pdf', pdfBytes);
 }
 
-
-
 async function main() {
   try {
     const imageUrl = await fetchImageUrl();
     console.log('Image URL:', imageUrl); // Log the image URL
     const imageBuffer = await downloadImage(imageUrl);
     
-  
-
     await createPdf(imageBuffer);
     console.log('PDF created successfully!');
   } catch (error) {
