@@ -15,7 +15,7 @@ async function fetchImageUrl() {
     },
     params: {
       ids: FRAME_ID,
-      scale: 2,
+      scale: 1, // Adjust as necessary
     },
   });
   return response.data.images[FRAME_ID];
@@ -28,18 +28,19 @@ async function downloadImage(imageUrl) {
 
 async function createPdf(imageBuffer) {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage();
+  const page = pdfDoc.addPage([1440, 1024]); // Set page size to 1440 x 1024
 
-  // Directly embed as PNG
   const image = await pdfDoc.embedPng(imageBuffer);
   
-  const { width, height } = image.scale(1);
-
+  // Scale the image to fit the page
+  const imageDims = image.scale(1);
+  
+  // Draw the image centered on the page
   page.drawImage(image, {
-    x: 0,
-    y: page.getHeight() - height,
-    width,
-    height,
+    x: (page.getWidth() - imageDims.width) / 2,
+    y: (page.getHeight() - imageDims.height) / 2,
+    width: imageDims.width,
+    height: imageDims.height,
   });
 
   const pdfBytes = await pdfDoc.save();
@@ -49,7 +50,7 @@ async function createPdf(imageBuffer) {
 async function main() {
   try {
     const imageUrl = await fetchImageUrl();
-    console.log('Image URL:', imageUrl); // Log the image URL
+    console.log('Image URL:', imageUrl);
     const imageBuffer = await downloadImage(imageUrl);
     
     await createPdf(imageBuffer);
